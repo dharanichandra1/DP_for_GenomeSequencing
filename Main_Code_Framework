@@ -1,0 +1,149 @@
+import time
+import numpy as np
+import matplotlib.pyplot as plt
+from memory_profiler import memory_usage
+from scipy import stats
+import networkx as nx
+
+# Needleman-Wunsch Algorithm
+def needleman_wunsch(seq1, seq2, gap_penalty=-1, match_score=1, mismatch_score=-1):
+    len_seq1 = len(seq1)
+    len_seq2 = len(seq2)
+
+    # Initialize score matrix
+    score_matrix = np.zeros((len_seq1 + 1, len_seq2 + 1))
+
+    # Initialization
+    for i in range(len_seq1 + 1):
+        score_matrix[i][0] = i * gap_penalty
+    for j in range(len_seq2 + 1):
+        score_matrix[0][j] = j * gap_penalty
+
+    # Fill the matrix
+    for i in range(1, len_seq1 + 1):
+        for j in range(1, len_seq2 + 1):
+            match = score_matrix[i - 1][j - 1] + (match_score if seq1[i - 1] == seq2[j - 1] else mismatch_score)
+            delete = score_matrix[i - 1][j] + gap_penalty
+            insert = score_matrix[i][j - 1] + gap_penalty
+            score_matrix[i][j] = max(match, delete, insert)
+
+    return score_matrix[len_seq1][len_seq2]
+
+# Smith-Waterman Algorithm
+def smith_waterman(seq1, seq2, gap_penalty=-1, match_score=1, mismatch_score=-1):
+    len_seq1 = len(seq1)
+    len_seq2 = len(seq2)
+
+    # Initialize score matrix
+    score_matrix = np.zeros((len_seq1 + 1, len_seq2 + 1))
+
+    # Initialize variables to track maximum score and its position
+    max_score = 0
+    max_i, max_j = 0, 0
+
+    # Fill the matrix
+    for i in range(1, len_seq1 + 1):
+        for j in range(1, len_seq2 + 1):
+            match = score_matrix[i - 1][j - 1] + (match_score if seq1[i - 1] == seq2[j - 1] else mismatch_score)
+            delete = score_matrix[i - 1][j] + gap_penalty
+            insert = score_matrix[i][j - 1] + gap_penalty
+            score_matrix[i][j] = max(0, match, delete, insert)
+
+            # Update maximum score and its position
+            if score_matrix[i][j] > max_score:
+                max_score = score_matrix[i][j]
+                max_i, max_j = i, j
+
+    return max_score, max_i, max_j
+
+# Generate random DNA sequences
+def generate_sequences(length):
+    alphabet = ['A', 'C', 'G', 'T']
+    seq1 = ''.join(np.random.choice(alphabet, length))
+    seq2 = ''.join(np.random.choice(alphabet, length))
+    return seq1, seq2
+
+# Main function for running experiments
+def run_experiments(seq_lengths):
+    nw_execution_times = []
+    nw_memory_usages = []
+    sw_execution_times = []
+    sw_memory_usages = []
+
+    for length in seq_lengths:
+        seq1, seq2 = generate_sequences(length)
+
+        # Memory usage measurement for Needleman-Wunsch
+        nw_mem_usage = memory_usage((needleman_wunsch, (seq1, seq2)))
+        nw_max_mem = max(nw_mem_usage)
+        nw_memory_usages.append(nw_max_mem)
+
+        start_time = time.time()
+        needleman_wunsch(seq1, seq2)
+        nw_execution_times.append(time.time() - start_time)
+
+        # Memory usage measurement for Smith-Waterman
+        sw_mem_usage = memory_usage((smith_waterman, (seq1, seq2)))
+        sw_max_mem = max(sw_mem_usage)
+        sw_memory_usages.append(sw_max_mem)
+
+        start_time = time.time()
+        smith_waterman(seq1, seq2)
+        sw_execution_times.append(time.time() - start_time)
+
+    # Statistical analysis
+    nw_avg_time = np.mean(nw_execution_times)
+    sw_avg_time = np.mean(sw_execution_times)
+    nw_std_time = np.std(nw_execution_times)
+    sw_std_time = np.std(sw_execution_times)
+    t_stat, p_value = stats.ttest_ind(nw_execution_times, sw_execution_times)
+
+    print("Needleman-Wunsch Average Execution Time:", nw_avg_time)
+    print("Needleman-Wunsch Standard Deviation:", nw_std_time)
+    print("Smith-Waterman Average Execution Time:", sw_avg_time)
+    print("Smith-Waterman Standard Deviation:", sw_std_time)
+    print("T-statistic:", t_stat)
+    print("P-value:", p_value)
+
+    return nw_execution_times, nw_memory_usages, sw_execution_times, sw_memory_usages
+
+# Example sequence lengths
+sequence_lengths = [10, 20, 50]
+
+# Run experiments
+nw_times, nw_mem_usages, sw_times, sw_mem_usages = run_experiments(sequence_lengths)
+
+# Plotting the memory usage results
+plt.figure(figsize=(12, 6))
+
+
+plt.subplot(2, 2, 2)
+plt.errorbar(['Needleman-Wunsch', 'Smith-Waterman'], [np.mean(nw_mem_usages), np.mean(sw_mem_usages)], 
+             yerr=[np.std(nw_mem_usages), np.std(sw_mem_usages)], fmt='o', capsize=5)
+plt.ylabel('Memory Usage (MiB)')
+plt.title('Average Memory Usage with Standard Deviation')
+
+plt.grid()
+
+plt.tight_layout()
+plt.show()
+
+plt.subplot(1, 2, 1)
+plt.plot(sequence_lengths, nw_times, label='Needleman-Wunsch')
+plt.plot(sequence_lengths, sw_times, label='Smith-Waterman')
+plt.xlabel('Sequence Length')
+plt.ylabel('Execution Time (seconds)')
+plt.title('Algorithm Performance vs. Sequence Length (Execution Time)')
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+plt.subplot(1, 2, 2)
+plt.plot(sequence_lengths, nw_mem_usages, label='Needleman-Wunsch')
+plt.plot(sequence_lengths, sw_mem_usages, label='Smith-Waterman')
+plt.xlabel('Sequence Length')
+plt.ylabel('Memory Usage (MiB)')
+plt.title('Algorithm Performance vs. Sequence Length (Memory Usage)')
+plt.legend()
+plt.tight_layout()
+plt.show()
